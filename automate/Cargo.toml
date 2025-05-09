@@ -1,0 +1,10 @@
+[package]
+name = "automate"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.98"
+clap = { version = "4.5.37", features = ["derive"] }
+maplit = "1.0.2"
+tiger-lib = { git = "https://github.com/shssoichiro/tiger.git", branch = "parse", version = "1.7.0", default-features = false, features = ["vic3"] }
