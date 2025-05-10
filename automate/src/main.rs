@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 use maplit::hashmap;
 use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::io::{BufWriter, Write, read_to_string};
 use std::path::{Path, PathBuf};
 use tiger_lib::FileKind;
 use tiger_lib::block::Block;
@@ -20,6 +20,13 @@ enum Commands {
     /// Parses the game's buildings files and produces ones
     /// that add the correct number of modded buildings
     Buildings {
+        input_path: PathBuf,
+        output_path: PathBuf,
+    },
+
+    /// Parses the game's states files and updates them with
+    /// the new sets of resources
+    States {
         input_path: PathBuf,
         output_path: PathBuf,
     },
@@ -55,6 +62,23 @@ fn main() -> anyhow::Result<()> {
                     in_path.file_name().unwrap().to_str().unwrap()
                 ));
                 create_modded_buildings_file(&contents, &out_path)?;
+            }
+        }
+        Commands::States {
+            input_path,
+            output_path,
+        } => {
+            if !input_path.is_dir() {
+                anyhow::bail!("Input path must be a directory");
+            }
+            if !output_path.is_dir() {
+                anyhow::bail!("Output path must be a directory");
+            }
+
+            for entry in std::fs::read_dir(input_path)?.filter_map(Result::ok) {
+                let in_path = entry.path();
+                let out_path = output_path.join(in_path.file_name().unwrap().to_str().unwrap());
+                create_modded_states_file(&in_path, &out_path)?;
             }
         }
     }
@@ -291,6 +315,44 @@ fn create_modded_buildings_file(contents: &Block, out_path: &Path) -> anyhow::Re
     }
 
     writeln!(out_file, "}}")?;
+    out_file.flush()?;
+
+    Ok(())
+}
+
+fn create_modded_states_file(in_path: &Path, out_path: &Path) -> anyhow::Result<()> {
+    const FARM_TYPES: &[&str] = &[
+        "bg_rice_farms",
+        "bg_wheat_farms",
+        "bg_maize_farms",
+        "bg_millet_farm",
+        "bg_rye_farms",
+    ];
+
+    let in_data = read_to_string(File::open(in_path)?)?;
+
+    let mut out_file = BufWriter::new(File::create(out_path)?);
+    write!(out_file, "{}", BOM_CHAR)?;
+
+    for mut line in in_data.lines() {
+        line = line.trim_start_matches(BOM_CHAR);
+        if line.trim().starts_with("arable_resources") {
+            let mut modified_line = line.to_string();
+            if FARM_TYPES
+                .iter()
+                .any(|&farm_type| modified_line.contains(farm_type))
+            {
+                modified_line = modified_line.replace("}", "\"bg_fruit_orchards\" }");
+            }
+            if modified_line.contains("bg_livestock_ranches") {
+                modified_line = modified_line.replace("}", "\"bg_wool_farms\" }");
+            }
+            writeln!(out_file, "{}", modified_line)?;
+        } else {
+            writeln!(out_file, "{}", line)?;
+        }
+    }
+
     out_file.flush()?;
 
     Ok(())
