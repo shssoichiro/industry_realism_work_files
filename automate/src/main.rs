@@ -421,10 +421,10 @@ fn create_modded_states_file_replace(in_path: &Path, out_path: &Path) -> anyhow:
                 .iter()
                 .any(|&farm_type| modified_line.contains(farm_type))
             {
-                modified_line = modified_line.replace("}", "\"bg_fruit_orchard\" }");
+                modified_line = modified_line.replace("}", "\"building_fruit_orchard\" }");
             }
-            if modified_line.contains("bg_livestock_ranches") {
-                modified_line = modified_line.replace("}", "\"bg_wool_farm\" }");
+            if modified_line.contains("bg_livestock_ranch") {
+                modified_line = modified_line.replace("}", "\"building_wool_farm\" }");
             }
             writeln!(out_file, "{}", modified_line)?;
         } else {
