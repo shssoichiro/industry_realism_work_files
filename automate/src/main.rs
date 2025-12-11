@@ -77,7 +77,10 @@ fn main() -> anyhow::Result<()> {
 
             for entry in std::fs::read_dir(input_path)?.filter_map(Result::ok) {
                 let in_path = entry.path();
-                let out_path = output_path.join(in_path.file_name().unwrap().to_str().unwrap());
+                let out_path = output_path.join(format!(
+                    "ir_{}",
+                    in_path.file_name().unwrap().to_str().unwrap()
+                ));
                 create_modded_states_file(&in_path, &out_path)?;
             }
         }
@@ -88,15 +91,15 @@ fn main() -> anyhow::Result<()> {
 
 fn create_modded_buildings_file(contents: &Block, out_path: &Path) -> anyhow::Result<()> {
     let building_ratios = hashmap! {
-        "building_textile_mills" => (4, "building_tailoring_workshops"),
-        "building_furniture_manufacturies" => (4, "building_luxury_furniture_manufacturies"),
-        "building_glassworks" => (4, "building_pottery_mills"),
+        "building_textile_mill" => (4, "building_tailoring_workshop"),
+        "building_furniture_manufactory" => (4, "building_luxury_furniture_manufactory"),
+        "building_glassworks" => (4, "building_pottery_mill"),
         "building_rye_farm" => (6, "building_fruit_orchard"),
         "building_wheat_farm" => (6, "building_fruit_orchard"),
         "building_rice_farm" => (6, "building_fruit_orchard"),
         "building_millet_farm" => (6, "building_fruit_orchard"),
         "building_maize_farm" => (6, "building_fruit_orchard"),
-        "building_livestock_ranch" => (2, "building_wool_farms"),
+        "building_livestock_ranch" => (2, "building_wool_farm"),
         "building_food_industry" => (4, "building_distillery"),
     };
 
@@ -322,34 +325,65 @@ fn create_modded_buildings_file(contents: &Block, out_path: &Path) -> anyhow::Re
 
 fn create_modded_states_file(in_path: &Path, out_path: &Path) -> anyhow::Result<()> {
     const FARM_TYPES: &[&str] = &[
-        "bg_rice_farms",
-        "bg_wheat_farms",
-        "bg_maize_farms",
-        "bg_millet_farm",
-        "bg_rye_farms",
+        "building_rice_farm",
+        "building_wheat_farm",
+        "building_maize_farm",
+        "building_millet_farm",
+        "building_rye_farm",
     ];
+
+    if in_path
+        .file_stem()
+        .unwrap()
+        .to_string_lossy()
+        .contains("99_seas")
+    {
+        return Ok(());
+    }
 
     let in_data = read_to_string(File::open(in_path)?)?;
 
     let mut out_file = BufWriter::new(File::create(out_path)?);
     write!(out_file, "{}", BOM_CHAR)?;
 
+    let mut depth = 0;
+    let mut in_state = false;
     for mut line in in_data.lines() {
         line = line.trim_start_matches(BOM_CHAR);
-        if line.trim().starts_with("arable_resources") {
+
+        if line.contains('{') {
+            depth += 1;
+        }
+        if line.contains('}') {
+            depth -= 1;
+        }
+
+        // Start state
+        if line.starts_with("STATE_") {
+            writeln!(out_file, "INJECT:{}", line)?;
+            in_state = true;
+            continue;
+        }
+
+        // End state
+        if in_state && depth == 0 {
+            writeln!(out_file, "}}")?;
+            in_state = false;
+            continue;
+        }
+
+        if line.contains("arable_resources") {
             let mut modified_line = line.to_string();
             if FARM_TYPES
                 .iter()
                 .any(|&farm_type| modified_line.contains(farm_type))
             {
-                modified_line = modified_line.replace("}", "\"bg_fruit_orchards\" }");
+                modified_line = modified_line.replace("}", "\"building_fruit_orchard\" }");
             }
-            if modified_line.contains("bg_livestock_ranches") {
-                modified_line = modified_line.replace("}", "\"bg_wool_farms\" }");
+            if modified_line.contains("building_livestock_ranch") {
+                modified_line = modified_line.replace("}", "\"building_wool_farm\" }");
             }
             writeln!(out_file, "{}", modified_line)?;
-        } else {
-            writeln!(out_file, "{}", line)?;
         }
     }
 
