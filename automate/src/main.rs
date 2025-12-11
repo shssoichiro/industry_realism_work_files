@@ -77,11 +77,8 @@ fn main() -> anyhow::Result<()> {
 
             for entry in std::fs::read_dir(input_path)?.filter_map(Result::ok) {
                 let in_path = entry.path();
-                let out_path = output_path.join(format!(
-                    "ir_{}",
-                    in_path.file_name().unwrap().to_str().unwrap()
-                ));
-                create_modded_states_file(&in_path, &out_path)?;
+                let out_path = output_path.join(in_path.file_name().unwrap().to_str().unwrap());
+                create_modded_states_file_replace(&in_path, &out_path)?;
             }
         }
     }
@@ -323,7 +320,8 @@ fn create_modded_buildings_file(contents: &Block, out_path: &Path) -> anyhow::Re
     Ok(())
 }
 
-fn create_modded_states_file(in_path: &Path, out_path: &Path) -> anyhow::Result<()> {
+#[allow(dead_code)]
+fn create_modded_states_file_inject(in_path: &Path, out_path: &Path) -> anyhow::Result<()> {
     const FARM_TYPES: &[&str] = &[
         "building_rice_farm",
         "building_wheat_farm",
@@ -384,6 +382,53 @@ fn create_modded_states_file(in_path: &Path, out_path: &Path) -> anyhow::Result<
                 modified_line = modified_line.replace("}", "\"building_wool_farm\" }");
             }
             writeln!(out_file, "{}", modified_line)?;
+        }
+    }
+
+    out_file.flush()?;
+
+    Ok(())
+}
+
+fn create_modded_states_file_replace(in_path: &Path, out_path: &Path) -> anyhow::Result<()> {
+    const FARM_TYPES: &[&str] = &[
+        "building_rice_farm",
+        "building_wheat_farm",
+        "building_maize_farm",
+        "building_millet_farm",
+        "building_rye_farm",
+    ];
+
+    if in_path
+        .file_stem()
+        .unwrap()
+        .to_string_lossy()
+        .contains("99_seas")
+    {
+        return Ok(());
+    }
+
+    let in_data = read_to_string(File::open(in_path)?)?;
+
+    let mut out_file = BufWriter::new(File::create(out_path)?);
+    write!(out_file, "{}", BOM_CHAR)?;
+
+    for mut line in in_data.lines() {
+        line = line.trim_start_matches(BOM_CHAR);
+        if line.trim().starts_with("arable_resources") {
+            let mut modified_line = line.to_string();
+            if FARM_TYPES
+                .iter()
+                .any(|&farm_type| modified_line.contains(farm_type))
+            {
+                modified_line = modified_line.replace("}", "\"bg_fruit_orchard\" }");
+            }
+            if modified_line.contains("bg_livestock_ranches") {
+                modified_line = modified_line.replace("}", "\"bg_wool_farm\" }");
+            }
+            writeln!(out_file, "{}", modified_line)?;
+        } else {
+            writeln!(out_file, "{}", line)?;
         }
     }
 
