@@ -5,7 +5,7 @@ use std::io::{BufWriter, Write, read_to_string};
 use std::path::{Path, PathBuf};
 use tiger_lib::FileKind;
 use tiger_lib::block::Block;
-use tiger_lib::fileset::FileEntry;
+use tiger_lib::fileset::{FileEntry, FileStage};
 use tiger_lib::parse::ParserMemory;
 use tiger_lib::pdxfile::PdxFile;
 
@@ -52,8 +52,12 @@ fn main() -> anyhow::Result<()> {
             for entry in std::fs::read_dir(input_path)?.filter_map(Result::ok) {
                 let in_path = entry.path();
                 let parser = ParserMemory::default();
-                let file_entry =
-                    FileEntry::new(in_path.clone(), FileKind::Vanilla, in_path.clone());
+                let file_entry = FileEntry::new(
+                    in_path.clone(),
+                    FileStage::NoStage,
+                    FileKind::Vanilla,
+                    in_path.clone(),
+                );
                 let contents =
                     PdxFile::read(&file_entry, &parser).expect("No file contents parsed");
 
